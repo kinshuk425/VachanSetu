@@ -1,72 +1,112 @@
 
+import re
 from difflib import SequenceMatcher
+from datetime import datetime
 
 
-FIELDS_TO_COMPARE = [
-    "name",
-    "date_of_birth",
-    "address"
-]
+def normalize_text(value):
+    """Normalize text for comparison."""
+
+    if not value:
+        return ""
+
+    value = str(value).lower().strip()
+    value = re.sub(r"[^\w\s]", " ", value)
+    value = re.sub(r"\s+", " ", value)
+
+    return value
 
 
-def calculate_similarity(value1, value2):
-    value1 = str(value1).lower().strip()
-    value2 = str(value2).lower().strip()
+def normalize_date(value):
+    """Convert common date formats into YYYY-MM-DD."""
+
+    if not value:
+        return ""
+
+    formats = [
+        "%d-%m-%Y",
+        "%d/%m/%Y",
+        "%Y-%m-%d",
+        "%d.%m.%Y",
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(value.strip(), fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+
+    return normalize_text(value)
+
+
+def similarity(a, b):
+    """Calculate similarity between two normalized values."""
 
     return SequenceMatcher(
         None,
-        value1,
-        value2
+        normalize_text(a),
+        normalize_text(b)
     ).ratio()
 
 
-def compare_documents(documents):
+def compare_documents(extracted_documents, threshold=0.90):
+    """
+    Compare extracted fields across documents.
+
+    extracted_documents format:
+    {
+        "application": {"name": "...", "date_of_birth": "..."},
+        "identity": {"name": "...", "date_of_birth": "..."}
+    }
+    """
 
     findings = []
 
-    for field in FIELDS_TO_COMPARE:
+    fields = ["name", "date_of_birth", "address"]
+
+    for field in fields:
 
         values = []
 
-        for document_name, data in documents.items():
-
+        for document, data in extracted_documents.items():
             value = data.get(field)
 
             if value:
-                values.append({
-                    "document": document_name,
-                    "value": value
-                })
+                values.append((document, str(value)))
 
         if len(values) < 2:
             continue
 
-        reference = values[0]
+        reference_document, reference_value = values[0]
 
-        for item in values[1:]:
+        for document, current_value in values[1:]:
 
-            similarity = calculate_similarity(
-                reference["value"],
-                item["value"]
-            )
+            if field == "date_of_birth":
+                first = normalize_date(reference_value)
+                second = normalize_date(current_value)
+                score = 1.0 if first == second else 0.0
+            else:
+                score = similarity(reference_value, current_value)
 
-            if similarity < 0.90:
-
+            if score < threshold:
                 findings.append({
                     "type": "cross_document_mismatch",
                     "field": field,
-                    "severity": "warning",
                     "documents": [
-                        reference["document"],
-                        item["document"]
+                        reference_document,
+                        document
                     ],
                     "values": [
-                        reference["value"],
-                        item["value"]
+                        reference_value,
+                        current_value
                     ],
-                    "similarity": round(similarity, 2),
-                    "explanation":
-                        f"Possible {field} discrepancy detected."
+                    "similarity": round(score, 2),
+                    "severity": "warning",
+                    "explanation": (
+                        f"Possible {field} discrepancy "
+                        f"between {reference_document} "
+                        f"and {document}."
+                    )
                 })
 
     return findings

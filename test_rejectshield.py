@@ -1,14 +1,12 @@
 
 from ai_engine.auditor import audit_application
 
-# Synthetic demo documents
 document_paths = {
     "application": "samples/application.txt",
     "identity": "samples/identity.txt",
     "certificate": "samples/certificate.txt"
 }
 
-# Required documents for this demo service
 requirements = [
     "application",
     "identity",
@@ -16,16 +14,22 @@ requirements = [
     "income_proof"
 ]
 
-report = audit_application(document_paths, requirements)
+# Execute the audit
+result = audit_application(document_paths, requirements)
 
 print("\n========== REJECTSHIELD AI ==========")
 
-print("Overall status:", report["overall_status"])
+print("Overall status:", result["overall_status"])
 
-print("\nDocuments processed:")
-for document in report["documents_processed"]:
-    print("-", document)
+print("\nExtraction methods:")
+for document, method in result["extraction_methods"].items():
+    print(f"- {document}: {method}")
+
+print("\nExtracted data:")
+for document, fields in result["extracted_data"].items():
+    print(f"\n{document}:")
+    print(fields)
 
 print("\nAudit findings:")
-for finding in report["findings"]:
+for finding in result["findings"]:
     print(finding)

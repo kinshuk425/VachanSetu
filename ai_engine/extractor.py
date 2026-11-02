@@ -2,42 +2,83 @@
 import re
 
 
+def _extract_line(text, labels):
+    """
+    Extract a value appearing after a field label.
+    Supports English and selected Hindi labels.
+    """
+
+    label_pattern = "|".join(labels)
+
+    pattern = (
+        rf"(?im)^\s*(?:{label_pattern})\s*[:\-]\s*(.*?)\s*$"
+    )
+
+    match = re.search(pattern, text)
+
+    if match:
+        value = match.group(1).strip()
+        return value if value else None
+
+    return None
+
+
 def extract_fields(text):
     """
-    Extract basic fields from document text.
-    Returns structured information.
+    Extract basic structured fields from document text.
+
+    This is the deterministic baseline extractor.
+    Pretrained AI extraction will be added separately.
     """
+
+    if not isinstance(text, str) or not text.strip():
+        return {}
 
     fields = {}
 
-    # Extract name
-    name_match = re.search(
-        r"Name\s*[:\-]\s*([A-Za-z ]+)",
+    # Applicant name
+    name = _extract_line(
         text,
-        re.IGNORECASE
+        [
+            r"Name",
+            r"Full Name",
+            r"Applicant Name",
+            r"नाम",
+            r"पूरा नाम"
+        ]
     )
 
-    if name_match:
-        fields["name"] = name_match.group(1).strip()
+    if name:
+        fields["name"] = name
 
-    # Extract date of birth
-    dob_match = re.search(
-        r"(?:DOB|Date of Birth)\s*[:\-]\s*([\d/-]+)",
+    # Date of birth
+    dob = _extract_line(
         text,
-        re.IGNORECASE
+        [
+            r"Date of Birth",
+            r"DOB",
+            r"Birth Date",
+            r"जन्म तिथि",
+            r"जन्म दिनांक"
+        ]
     )
 
-    if dob_match:
-        fields["date_of_birth"] = dob_match.group(1).strip()
+    if dob:
+        fields["date_of_birth"] = dob
 
-    # Extract address
-    address_match = re.search(
-        r"Address\s*[:\-]\s*(.+)",
+    # Address
+    address = _extract_line(
         text,
-        re.IGNORECASE
+        [
+            r"Address",
+            r"Residential Address",
+            r"Permanent Address",
+            r"पता",
+            r"स्थायी पता"
+        ]
     )
 
-    if address_match:
-        fields["address"] = address_match.group(1).strip()
+    if address:
+        fields["address"] = address
 
     return fields

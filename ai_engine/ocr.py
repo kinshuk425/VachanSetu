@@ -1,45 +1,52 @@
 
-import fitz
-import pytesseract
+from pathlib import Path
+import pymupdf
 from PIL import Image
-import io
-import os
+import pytesseract
 
 
 def extract_text(file_path):
     """
-    Extract text from PDF or image documents.
-    Supports text-based PDFs, scanned PDFs and images.
+    Extract text from TXT, PDF, and image files.
     """
 
-    if not os.path.exists(file_path):
+    path = Path(file_path)
+
+    if not path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    text = ""
+    extension = path.suffix.lower()
 
-    # PDF processing
-    if file_path.lower().endswith(".pdf"):
-        pdf = fitz.open(file_path)
+    # 1. Plain text files
+    if extension == ".txt":
+        return path.read_text(encoding="utf-8")
 
-        for page_number, page in enumerate(pdf):
-            page_text = page.get_text()
+    # 2. PDF files
+    elif extension == ".pdf":
+        extracted_text = []
 
-            # OCR fallback for scanned PDF pages
-            if not page_text.strip():
-                pix = page.get_pixmap(dpi=200)
-                image = Image.open(
-                    io.BytesIO(pix.tobytes("png"))
-                )
-                page_text = pytesseract.image_to_string(image)
+        with pymupdf.open(path) as pdf:
+            for page in pdf:
+                text = page.get_text()
 
-            text += f"\n--- Page {page_number + 1} ---\n"
-            text += page_text
+                # OCR scanned PDF pages if text is unavailable
+                if not text.strip():
+                    pix = page.get_pixmap()
+                    image = Image.frombytes(
+                        "RGB",
+                        [pix.width, pix.height],
+                        pix.samples
+                    )
+                    text = pytesseract.image_to_string(image)
 
-        pdf.close()
+                extracted_text.append(text)
 
-    # Image processing
+        return "\n".join(extracted_text)
+
+    # 3. Image files
+    elif extension in [".png", ".jpg", ".jpeg", ".tiff", ".bmp"]:
+        image = Image.open(path)
+        return pytesseract.image_to_string(image)
+
     else:
-        image = Image.open(file_path)
-        text = pytesseract.image_to_string(image)
-
-    return text.strip()
+        raise ValueError(f"Unsupported file format: {extension}")
